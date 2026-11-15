@@ -32,7 +32,6 @@ from urllib.parse import parse_qs, urlparse
 import backtest_data
 import backtest_signals
 import backtest_trades
-import gitsync
 import spot_scan
 import ltf
 import fx_source
@@ -40,7 +39,7 @@ import journal
 import tg
 import stats
 
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.1.1"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(APP_DIR, "static")
 DATA_DIR = os.environ.get("SMC_APP_DATA", os.path.join(APP_DIR, "data"))
@@ -80,7 +79,6 @@ DEFAULTS = {
     "tg_chat": "",                # chat id (не секрет; токен — лише в SMC_TG_TOKEN)
     "tg_name": "",
     "extra_args": "",
-    "git_autopush": True,         # автозбереження коду в GitHub (лише якщо папку підключено до git)
     "breakers": True,             # шукати брейкер-блоки (скринер v2.6+); вимкнено -> --no-breakers
     "spot_auto": True,            # вкладка «Спот»: сканувати раз на добу, поки додаток відкритий
     "ltf_enabled": True,          # уточнення входу на 15m + алерт «УТОЧНЕННЯ 15m»
@@ -91,7 +89,7 @@ LIMITS = {
     "price_check": (0, 600, float), "min_stop_atr": (0, 5, float), "entry_tol": (0, 50, float), "approach_atr": (0, 50, float),
 }
 TRENDS = ("strict", "flag", "bos")
-FLAGS = ("sound", "popup", "voice", "tv_button", "stop_wick", "caffeinate", "sheet_sync", "tg_enabled", "git_autopush", "breakers", "spot_auto", "ltf_enabled", "fx_enabled")
+FLAGS = ("sound", "popup", "voice", "tv_button", "stop_wick", "caffeinate", "sheet_sync", "tg_enabled", "breakers", "spot_auto", "ltf_enabled", "fx_enabled")
 ICLOUD_DIR = os.path.expanduser("~/Library/Mobile Documents/com~apple~CloudDocs")
 
 
@@ -1167,12 +1165,6 @@ def tr_get(rid=None):
     return 200, dict(_tr_public(res), ok=True, defaults=backtest_trades.DEFAULTS)
 
 
-# ---------------------------------------------------------------- GitHub: автозбереження коду
-GIT = gitsync.GitSync(os.environ.get("SMC_GIT_DIR") or APP_DIR, os.path.join(DATA_DIR, "git_state.json"),
-                      enabled=lambda: bool(load_settings().get("git_autopush")), version=APP_VERSION,
-                      interval=float(os.environ.get("SMC_GIT_INTERVAL") or 60))
-
-
 # ---------------------------------------------------------------- 4h + 1h + 15m: лайв-графіки й уточнення входу на 15m
 def ltf_opts(s):
     """Правила стопа/R:R для уточнення 15m — ті самі, що в скринера: мін. стоп × середньої свічки і мін. R:R
@@ -1675,8 +1667,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, dict(fx_source.describe(s.get("fx_dir") or "", s.get("fx_pairs")), enabled=bool(s.get("fx_enabled"))))
         if u.path == "/api/spot":
             return self._send(200, spot_state())
-        if u.path == "/api/git/status":
-            return self._send(200, GIT.status())
         if u.path == "/api/backtest/oos":
             try:
                 rid = int((q.get("run") or ["0"])[0]) or None
@@ -1903,9 +1893,6 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/spot/scan":
             code, res = spot_start(body)
             return self._send(code, res)
-        if u.path == "/api/git/push":
-            GIT.sync(force=True)
-            return self._send(200, GIT.status())
         if u.path == "/api/backtest/oos/open":
             code, res = oos_open(body)
             return self._send(code, res)
@@ -2003,7 +1990,6 @@ def main():
     if SCREENER.status()["running"]:
         print(f"Скринер уже працює з попереднього запуску (pid {SCREENER.state.get('pid')}), підхоплюю його.")
     threading.Thread(target=watchdog, daemon=True).start()
-    GIT.start()
     threading.Thread(target=spot_auto_loop, daemon=True).start()
     LTF.start()
     LTF_FX.start()

@@ -40,7 +40,7 @@ def wait_up(t=20):
 
 data = tempfile.mkdtemp(prefix="smcrs_")
 with open(os.path.join(data, "settings.json"), "w") as f:
-    json.dump({"caffeinate": False, "git_autopush": False, "spot_auto": False, "ltf_enabled": False}, f)
+    json.dump({"caffeinate": False, "spot_auto": False, "ltf_enabled": False}, f)
 p = subprocess.Popen([sys.executable, os.path.join(APP, "app.py"), "--port", str(PORT), "--no-browser"],
                      env=dict(os.environ, SMC_APP_DATA=data, HOME=data), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 try:

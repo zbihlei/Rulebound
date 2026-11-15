@@ -648,7 +648,6 @@ async function loadSettings() {
   $("#cmdPreview").textContent = r.command || "";
   renderPopupBtn();
   renderEnv(r.env);
-  loadGit();
   loadFx();
 }
 document.addEventListener("click", async e => {
@@ -796,37 +795,6 @@ $("#btnRestart").addEventListener("click", async () => {
   setTimeout(tick, 1200);
 });
 
-// ---------------------------------------------------------------- GitHub
-const gitTime = iso => iso ? iso.replace("T", " ").slice(0, 16) : "";
-async function loadGit() {
-  let g;
-  try { g = await api("/api/git/status"); } catch (e) { return; }
-  const el = $("#gitState");
-  let h;
-  if (!g.repo) h = `<span class="no">✗</span> Папку ще не підключено до git. У Терміналі: <code>cd ~/Rulebound && git init -b main</code>, далі — як у першому пуші.`;
-  else if (!g.remote) h = `<span class="no">✗</span> Немає адреси репозиторію. У Терміналі: <code>git remote add origin https://github.com/ЛОГІН/Rulebound.git</code>`;
-  else {
-    const link = g.web ? `<a href="${esc(g.web)}" target="_blank" rel="noopener">${esc(g.web.replace("https://github.com/", ""))}</a>` : esc(g.remote);
-    const bad = g.ok === false && g.error;
-    h = `<span class="${bad ? "no" : "ok"}">${bad ? "✗" : "✓"}</span> ${link} · гілка ${esc(g.branch || "?")}`
-      + (g.last_push ? ` · останній пуш ${esc(gitTime(g.last_push))}` : "")
-      + (g.last_commit ? ` · коміт <code>${esc(g.last_commit.hash)}</code> ${esc(gitTime(g.last_commit.at))}` : "")
-      + (g.ahead ? ` · <b>не запушено комітів: ${g.ahead}</b>` : "")
-      + (g.dirty && g.dirty.length ? ` · змінених файлів: ${g.dirty.length}${g.enabled ? " (збережу за хвилину-дві)" : ""}` : "")
-      + (bad ? `<br><span class="warnc">${esc(g.error)}</span>` : "")
-      + (g.enabled ? "" : " — <b>автозбереження вимкнено</b>");
-  }
-  el.innerHTML = h;
-  $("#gitPush").disabled = !(g.repo && g.remote);
-}
-$("#gitPush").addEventListener("click", async () => {
-  const m = $("#gitMsg");
-  m.textContent = "Пушу…"; m.style.color = "";
-  const g = await api("/api/git/push", {});
-  m.textContent = g.ok ? "Збережено в GitHub ✓" : "Не вдалося — див. вище";
-  m.style.color = g.ok ? "var(--green)" : "var(--red)";
-  loadGit();
-});
 
 // ---------------------------------------------------------------- Telegram
 function renderTg(env) {
