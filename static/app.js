@@ -223,6 +223,7 @@ async function pollResults(force) {
     if (r.changed === false) { renderStale(); return; }
     S.res = r;
     S.mtime = r.mtime;
+    S.fbMeta = r.feedback_meta || S.fbMeta || null;
     const data = r.data || {};
     S.market = data.market || "futures";
     const nowS = Date.now() / 1000;
@@ -242,14 +243,20 @@ async function pollResults(force) {
 
 function visibleRows() {
   const q = S.q.trim().toUpperCase();
-  return S.rows.filter(r =>
+  if (S.showMuted) return S.rows.filter(r => r.muted && (!q || r.symbol.includes(q)));
+  return S.rows.filter(r => !r.muted &&
     (S.filter === "all" || (S.filter === "hot" ? r.hot : S.filter === "zone" ? r.rank === 0 : r.rank === 1)) &&
     (S.dir === "all" || r.dir === S.dir) &&
     (!q || r.symbol.includes(q)));
 }
 
 function renderAll() {
-  const rows = S.rows;
+  const rows = S.rows.filter(r => !r.muted);
+  const nMuted = S.rows.length - rows.length;
+  if (S.showMuted && !nMuted) S.showMuted = false;   // повернули останню сховану — назад до звичайного списку
+  $("#cMuted").textContent = nMuted;
+  $("#mutedChips").classList.toggle("hidden", !nMuted && !S.showMuted);
+  $("#mutedChip").classList.toggle("on", !!S.showMuted);
   $("#cAll").textContent = rows.length;
   $("#cZone").textContent = rows.filter(r => r.rank === 0).length;
   $("#cApproach").textContent = rows.filter(r => r.rank === 1).length;
@@ -363,7 +370,7 @@ function tileHtml(r) {
   const bt = r.btcFlag ? esc(r.btcFlag.split(" — ")[0].replace("BTC різко ", "")) : "";
   return `<div class="tile s${r.rank}${r.hot ? " hot" : ""}${r.btc ? " btc-" + r.btc : ""}" data-i="${r.idx}">
       <div class="t-top"><a class="sym" href="${tvLink(r.symbol)}" target="_blank" rel="noopener">${esc(r.symbol.replace(/USDT$/, ""))}</a>
-        <span class="dir-${esc(r.dir)}">${esc(r.dir)}</span>${r.hot ? '<span class="t-hot" title="сильний сетап (бали ≥ 2)">★</span>' : ""}</div>
+        <span class="dir-${esc(r.dir)}">${esc(r.dir)}</span>${r.hot ? '<span class="t-hot" title="сильний сетап (бали ≥ 2)">★</span>' : ""}${fbMark(r)}</div>
       <div class="t-st act${r.rank}">${esc(r.rank === 0 ? "у зоні" : r.status)}${r.zone_type === "брейкер" ? ' · <span class="tag amber">брейкер</span>' : ""}</div>
       <div class="t-lv"><span>вхід</span><b>${fmt(r.entry)}</b><span>стоп</span><b>${fmt(r.stop)}</b><span>ціль</span><b>${fmt(r.target)}</b></div>
       ${r.btc === "against" ? `<div class="t-btc" title="${esc(r.btcFlag)}">₿ ${bt} · проти угоди</div>` : r.btc === "with" ? `<div class="t-btc with" title="${esc(r.btcFlag)}">₿ ${bt} · у бік угоди</div>` : ""}
@@ -503,6 +510,80 @@ document.addEventListener("click", e => {
   if (b) { const c = b.closest(".card"); setFold(c, !c.classList.contains("folded")); foldSave(); }
 });
 
+// ---------------------------------------------------------------- фідбек на сигнали (v2.2)
+const FB_ICON = { like: "👍", dislike: "👎", stale: "⊘" };
+function fbMark(r) {
+  const f = r.feedback;
+  if (!f || !FB_ICON[f.verdict]) return "";
+  const m = S.fbMeta || {}, why = f.reason && m.reasons ? " — " + (m.reasons[f.reason] || f.reason) : "";
+  return ` <span class="t-fb" title="твоя оцінка: ${esc(((m.verdicts || {})[f.verdict] || f.verdict) + why)}">${FB_ICON[f.verdict]}</span>`;
+}
+function fbRowHtml(r) {
+  if (!r.fb_key) return "";
+  const f = r.feedback || {}, m = S.fbMeta || { verdicts: {}, reasons: {} };
+  const btn = (v, label) => `<button type="button" class="chip small${f.verdict === v ? " on" : ""}" data-fbv="${v}" data-fbi="${r.idx}">${FB_ICON[v]} ${esc(label)}</button>`;
+  const reasons = Object.entries(m.reasons || {}).map(([k, t]) =>
+    `<label class="fbr"><input type="radio" name="fbr${r.idx}" value="${esc(k)}"${f.reason === k ? " checked" : ""}> ${esc(t)}</label>`).join("");
+  const state = r.muted ? ` <span class="muted small">сховано</span> <button type="button" class="linkbtn small" data-unmute="${r.idx}">повернути</button>`
+    : (f.verdict ? ` <span class="muted small">оцінено ${esc((f.at || "").slice(5, 16).replace("T", " "))}</span>` : "");
+  return `<div class="fbrow"><span class="muted small">Твоя оцінка:</span>
+      ${btn("like", (m.verdicts || {}).like || "мій сетап")} ${btn("dislike", (m.verdicts || {}).dislike || "не мій")} ${btn("stale", (m.verdicts || {}).stale || "неактуально")}${state}</div>
+    <div class="fbform hidden" id="fbf${r.idx}">
+      <div class="fbrs">${reasons}</div>
+      <input class="fbnote" id="fbn${r.idx}" maxlength="300" placeholder="коментар (за бажанням)">
+      <label class="ck small"><input type="checkbox" id="fbm${r.idx}"> Сховати цю зону (без алертів, доки існує саме ця зона)</label>
+      <button type="button" class="btn small primary" data-fbsave="${r.idx}">Зберегти</button>
+      <button type="button" class="btn small" data-fbcancel="${r.idx}">Скасувати</button>
+      <span class="small" id="fbe${r.idx}"></span>
+    </div>`;
+}
+async function fbSend(r, body) {
+  let res;
+  try {
+    res = await api("/api/feedback" + mkq("?"), Object.assign({ symbol: r.symbol, dir: r.dir, zone_low: r.zone_low }, body));
+  } catch (e) { res = { ok: false, error: "немає зв'язку з додатком" }; }
+  if (!res.ok) return res;
+  const v = (S.fbMeta && S.fbMeta.verdicts || {})[body.verdict] || body.verdict;
+  showMsg(`${r.symbol} ${r.dir}: оцінку «${v}» збережено` + (body.mute ? ", зону сховано — алертів по ній не буде" : "") + ".");
+  pollResults(true);
+  return res;
+}
+document.addEventListener("click", async e => {
+  const t = e.target;
+  if (!t.closest) return;
+  const vb = t.closest("[data-fbv]"), sb = t.closest("[data-fbsave]"), cb = t.closest("[data-fbcancel]"), ub = t.closest("[data-unmute]");
+  if (!vb && !sb && !cb && !ub) return;
+  const i = +((vb && vb.dataset.fbi) || (sb && sb.dataset.fbsave) || (cb && cb.dataset.fbcancel) || (ub && ub.dataset.unmute));
+  const r = S.rows.find(x => x.idx === i);
+  if (!r) return;
+  const form = $("#fbf" + i);
+  if (vb) {
+    const v = vb.dataset.fbv;
+    if (v === "like") { vb.disabled = true; await fbSend(r, { verdict: "like" }); return; }
+    form.dataset.v = v;
+    form.classList.remove("hidden");
+    $("#fbm" + i).checked = v === "stale" || !!r.muted;   // «неактуально» — за замовчуванням сховати
+    $("#fbe" + i).textContent = "";
+    return;
+  }
+  if (cb) { form.classList.add("hidden"); return; }
+  if (sb) {
+    const pick = form.querySelector(`input[name="fbr${i}"]:checked`);
+    if (!pick) { $("#fbe" + i).textContent = "Вибери причину"; $("#fbe" + i).className = "small neg"; return; }
+    sb.disabled = true;
+    const res = await fbSend(r, { verdict: form.dataset.v, reason: pick.value, note: $("#fbn" + i).value, mute: $("#fbm" + i).checked });
+    sb.disabled = false;
+    if (!res.ok) { $("#fbe" + i).textContent = res.error || "Не вдалося"; $("#fbe" + i).className = "small neg"; }
+    return;
+  }
+  if (ub) {
+    const res = await api("/api/feedback/unmute" + mkq("?"), { key: r.fb_key });
+    showMsg(res.ok ? `${r.symbol} ${r.dir}: зону повернуто — алерти по ній знову приходитимуть.` : (res.error || "Не вдалося"), !res.ok);
+    pollResults(true);
+  }
+});
+$("#mutedChip").addEventListener("click", () => { S.showMuted = !S.showMuted; renderAll(); });
+
 function renderCharts() {
   destroyCharts();
   const rows = visibleRows();
@@ -517,6 +598,7 @@ function renderCharts() {
       <div class="hd"><button type="button" class="cfold" title="Згорнути / розгорнути графіки">${FOLD.has(fk) ? "▸" : "▾"}</button><b>${r.idx + 1}. ${esc(r.symbol)}</b> <span class="dir-${esc(r.dir)}">${esc(r.dir)}</span>${r.zone_type === "брейкер" ? ' <span class="tag amber">брейкер</span>' : ""}
         | ${esc(r.status)} | вхід ${fmt(r.entry)} · стоп ${fmt(r.stop)} · ціль ${fmt(r.target)} | <b>R:R ${fix(r.rr, 1)}</b>${extra}${warn}
         | <a href="${tvLink(r.symbol)}" target="_blank" rel="noopener">TradingView</a></div>
+      ${fbRowHtml(r)}
       ${liveOn() ? `<div class="tf3">
         <div class="tfbox"><div class="tflb">4h · сигнал</div><div class="chart ch3" id="ch${r.idx}"></div></div>
         <div class="tfbox"><div class="tflb" id="lb1h${r.idx}">1h</div><div class="chart ch3" id="ch1h${r.idx}"></div></div>

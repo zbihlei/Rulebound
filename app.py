@@ -36,10 +36,11 @@ import spot_scan
 import ltf
 import fx_source
 import journal
+import feedback
 import tg
 import stats
 
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.2.0"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(APP_DIR, "static")
 DATA_DIR = os.environ.get("SMC_APP_DATA", os.path.join(APP_DIR, "data"))
@@ -1178,14 +1179,59 @@ def ltf_opts(s):
 
 
 def ltf_rows(fx=False):
-    """Сигнали «у списку» з останнього скану (не старші за 3 години — інакше скринер, імовірно, не працює)."""
+    """Сигнали «у списку» з останнього скану (не старші за 3 години — інакше скринер, імовірно, не працює).
+    Сховані зони (фідбек) — без уточнення 15m і його алертів."""
     s = load_settings()
     if not s.get("ltf_enabled", True) or (fx and not s.get("fx_enabled")):
         return []
-    res = read_results(s, d=fx_results_dir(s) if fx else None)
+    d = fx_results_dir(s) if fx else results_dir(s)
+    res = read_results(s, d=d)
     if res.get("source") != "app" or res.get("age_s", 1e9) > 3 * 3600:
         return []
-    return [r for r in (res.get("data") or {}).get("candidates", []) if r.get("symbol") and r.get("zone_low")]
+    rows = [r for r in (res.get("data") or {}).get("candidates", []) if r.get("symbol") and r.get("zone_low")]
+    return feedback.drop_muted(d, rows)
+
+
+# ---------------------------------------------------------------- фідбек на сигнали (v2.2): оцінка й «сховати зону»
+FEEDBACK_META = {"verdicts": feedback.VERDICTS, "reasons": feedback.REASONS}
+
+
+def mark_feedback(res, out_dir):
+    """Кожному сигналу — ключ зони, остання оцінка Michel і чи зону сховано (для карток і перемикача «сховані»)."""
+    cands = (res.get("data") or {}).get("candidates") if isinstance(res, dict) else None
+    if not cands:
+        return res
+    m, last = feedback.muted(out_dir), feedback.last_feedback(out_dir)
+    for r in cands:
+        if not isinstance(r, dict) or r.get("zone_low") is None or not r.get("symbol"):
+            continue
+        k = feedback.row_key(r)
+        r["fb_key"] = k
+        r["muted"] = k in m
+        if k in last:
+            r["feedback"] = last[k]
+    res["feedback_meta"] = FEEDBACK_META
+    return res
+
+
+def feedback_save(scr, s, body, market):
+    """POST /api/feedback: {symbol, dir, zone_low, verdict, reason, note, mute}. Ознаки сигналу — з останнього скану."""
+    out_dir = scr.out_fn(s)
+    res = read_results(s, d=out_dir)
+    cands = (res.get("data") or {}).get("candidates") or []
+    try:
+        want = feedback.zone_key(body.get("symbol"), body.get("dir"), body.get("zone_low"))
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "error": "невідомий сигнал"}
+    row = next((r for r in cands if isinstance(r, dict) and r.get("zone_low") is not None and feedback.row_key(r) == want), None)
+    if row is None:
+        return 404, {"ok": False, "error": "сигналу вже немає в останньому скані — онови сторінку"}
+    try:
+        key = feedback.record(out_dir, row, str(body.get("verdict") or ""), str(body.get("reason") or ""),
+                              body.get("note") or "", bool(body.get("mute")), market)
+    except ValueError as e:
+        return 400, {"ok": False, "error": str(e)}
+    return 200, {"ok": True, "key": key, "muted": bool(body.get("mute"))}
 
 
 LTF = ltf.LtfWatcher(DATA_DIR, ltf_rows, lambda t, x: notify_mac(t, x),
@@ -1629,7 +1675,8 @@ class Handler(BaseHTTPRequestHandler):
                     since = float(q["since"][0])
                 except ValueError:
                     pass
-            return self._send(200, stamp_first_seen(read_results(s, since, scr.out_fn(s)), mk or "crypto"))
+            return self._send(200, mark_feedback(stamp_first_seen(read_results(s, since, scr.out_fn(s)), mk or "crypto"),
+                                                 scr.out_fn(s)))
         if u.path == "/api/log":
             n = min(2000, max(10, int((q.get("n") or ["300"])[0] or 300)))
             return self._send(200, {"lines": tail(scr.log_path, n), "path": scr.log_path})
@@ -1863,6 +1910,12 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/journal/link":
             code, res = journal_link(s, body)
             return self._send(code, res)
+        if u.path == "/api/feedback":
+            code, res = feedback_save(scr, s, body, mk or "crypto")
+            return self._send(code, res)
+        if u.path == "/api/feedback/unmute":
+            ok = feedback.unmute(scr.out_fn(s), str(body.get("key") or ""))
+            return self._send(200 if ok else 404, {"ok": ok, **({} if ok else {"error": "цю зону не сховано"})})
         if u.path == "/api/journal/lists":
             code, res = journal_lists(body)
             return self._send(code, res)

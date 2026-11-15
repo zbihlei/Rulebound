@@ -132,6 +132,16 @@ tr.s2 td { background: var(--grey-bg); }
 @keyframes flash { 0% { box-shadow: 0 0 0 4px rgba(41,98,255,.55); } 100% { box-shadow: 0 0 0 0 rgba(41,98,255,0); } }
 .card .hd { font-size: 13px; margin-bottom: 6px; line-height: 1.5; }
 .card .hd .warnings { color: #8a4b00; }
+/* фідбек на сигнали (v2.2): оцінка, причина, «сховати зону» */
+.fbrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: -2px 0 6px; }
+.chip.small { font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); background: var(--surface); }
+.chip.small.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.fbform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 10px; margin: 0 0 8px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--surface); font-size: 13px; }
+.fbrs { display: flex; flex-wrap: wrap; gap: 4px 12px; width: 100%; }
+.fbr { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.fbnote { flex: 1 1 220px; min-width: 0; font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.t-fb { margin-left: 4px; font-size: 12px; }
 .chart { position: relative; width: 100%; height: 430px; overflow: hidden; }
 .chart .nochart { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 20px; }
 

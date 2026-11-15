@@ -36,6 +36,7 @@ KEEP = ["symbol", "dir", "status", "rank", "score", "price", "zone_low", "zone_h
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tg.py поруч
+import feedback  # noqa: E402  сховані зони (фідбек на сигнали, v2.2)
 
 
 def load_screener(path):
@@ -154,7 +155,8 @@ def make_live_wait(mod):
                 prices = mod.fetch_prices()
             except Exception:
                 continue  # тимчасова помилка мережі: спробуємо на наступному кроці
-            touched = mod.live_touches(live_rows, prices, fired)
+            # сховані зони (фідбек) — без живих алертів; файл читається щоразу, тож «Сховати» діє одразу
+            touched = mod.live_touches(feedback.drop_muted(out_dir, live_rows), prices, fired)
             if touched:
                 fired_add(out_dir, [mod.live_key(r) for r, _ in touched])
             if touched and hasattr(mod, "apply_btc"):
@@ -578,6 +580,12 @@ def install_hooks(mod):
             def alert_new(rows, seen_path):
                 macq.begin()
                 try:
+                    out_dir = os.path.dirname(seen_path) or "."
+                    try:
+                        feedback.touch_seen(out_dir, rows)   # сховані зони: оновити «ще у списку», давно зниклі прибрати
+                    except Exception as e:
+                        print(f"  [додаток] сховані зони: {e}")
+                    rows = feedback.drop_muted(out_dir, rows)   # схованим зонам алертів немає
                     suppress_repeat_zone(mod, rows, seen_path)
                     n = orig_alert_new(rows, seen_path)
                     zone = [mod.live_key(r) for r in rows if isinstance(r, dict) and r.get("rank") == 0] if hasattr(mod, "live_key") else []
