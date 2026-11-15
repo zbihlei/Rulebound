@@ -142,6 +142,10 @@ tr.s2 td { background: var(--grey-bg); }
 .fbr { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
 .fbnote { flex: 1 1 220px; min-width: 0; font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
 .t-fb { margin-left: 4px; font-size: 12px; }
+.tile .t-fbbar { display: flex; align-items: center; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line, #e0e3eb); }
+.t-fbb { border: 1px solid var(--line, #e0e3eb); background: #fff; border-radius: 6px; padding: 1px 7px; font-size: 13px; cursor: pointer; line-height: 1.5; }
+.t-fbb:hover { background: #f2f3f6; }
+.t-fbb.on { background: var(--ink, #131722); border-color: var(--ink, #131722); color: #fff; }
 .chart { position: relative; width: 100%; height: 430px; overflow: hidden; }
 .chart .nochart { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 20px; }
 

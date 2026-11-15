@@ -197,6 +197,7 @@ try:
         check("форекс-скринер запущено, сетапи у таблиці", n > 0, n)
         href = pg.locator("#tbody tr a.sym").first.get_attribute("href")
         check("посилання на TradingView — FX:пара", "FX%3A" in href, href)
+        pg.locator("#c0").scroll_into_view_if_needed()   # графіки малюються, лише коли картка біля екрана (як у людини)
         pg.wait_for_selector("#ch150 canvas", timeout=20000)
         check("3 графіки 4h/1h/15m зі свічками MT5", all(pg.locator(f"{c} canvas").count() > 0 for c in ("#ch0", "#ch1h0", "#ch150")))
         expect(pg.locator("#lt0")).not_to_contain_text("рахую", timeout=30000)

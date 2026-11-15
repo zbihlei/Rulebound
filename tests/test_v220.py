@@ -150,15 +150,18 @@ try:
         check("на кожній картці — рядок «Твоя оцінка» з трьома кнопками", pg.locator("#charts .fbrow").count() == 2
               and pg.locator("#charts [data-fbv]").count() == 6)
         check("перемикача «Сховані» не видно, поки нічого не сховано", pg.locator("#mutedChips").is_hidden())
-        card_a = pg.locator("#charts .card:has-text('AAAUSDT')")
-        card_a.locator("[data-fbv=like]").click()
+        check("на кожному блоці вгорі — три кнопки оцінки", pg.locator("#tiles .tile .t-fbbar").count() == 2
+              and pg.locator("#tiles [data-fbv]").count() == 6)
+        pg.locator("#tiles .tile:has-text('AAA') [data-fbv=like]").click()
         expect(pg.locator("#msg")).to_contain_text("мій сетап")
         expect(pg.locator("#charts .card:has-text('AAAUSDT') [data-fbv=like]")).to_have_class("chip small on", timeout=8000)
-        check("👍 — одним кліком, кнопка підсвічена, біля блока — позначка", pg.locator("#tiles .tile:has-text('AAA') .t-fb").count() == 1)
+        check("👍 з блока — одним кліком: підсвічено і на блоці, і на картці, біля назви — позначка",
+              pg.locator("#tiles .tile:has-text('AAA') .t-fbb.on").count() == 1 and pg.locator("#tiles .tile:has-text('AAA') .t-fb").count() == 1)
         card_b = pg.locator("#charts .card:has-text('BBBUSDT')")
-        card_b.locator("[data-fbv=dislike]").click()
+        pg.locator("#tiles .tile:has-text('BBB') [data-fbv=dislike]").click()
         form = card_b.locator(".fbform")
         expect(form).to_be_visible()
+        check("👎 з блока — прокрутка до картки сигналу й вибір причини там", form.is_visible())
         check("👎 відкриває вибір причини; «сховати» за замовчуванням вимкнено", form.locator(".fbr").count() == len(FB.REASONS)
               and not form.locator("input[type=checkbox]").is_checked())
         form.locator("[data-fbsave]").click()

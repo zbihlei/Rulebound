@@ -376,6 +376,7 @@ function tileHtml(r) {
       ${r.btc === "against" ? `<div class="t-btc" title="${esc(r.btcFlag)}">₿ ${bt} · проти угоди</div>` : r.btc === "with" ? `<div class="t-btc with" title="${esc(r.btcFlag)}">₿ ${bt} · у бік угоди</div>` : ""}
       ${r.first_seen ? `<div class="t-when" title="коли сигнал уперше з'явився у списку">з ${esc(seenText(r.first_seen))}</div>` : ""}
       <div class="t-ft"><b>R:R ${fix(r.rr, 1)}</b><span>бали ${scoreHtml(r.score)}</span><span>${r.rank === 0 ? "" : fix(r.dist, 1) + "%"}</span>${warn}</div>
+      ${tileFbHtml(r)}
     </div>`;
 }
 function renderTiles() {
@@ -398,7 +399,7 @@ $("#viewChips").addEventListener("click", e => {
   applyView();
 });
 $("#tiles").addEventListener("click", e => {
-  if (e.target.closest("a")) return;
+  if (e.target.closest("a") || e.target.closest("[data-fbv],[data-unmute]")) return;   // кнопки оцінки — свої обробники
   const t = e.target.closest(".tile[data-i]");
   if (t) jumpTo(+t.dataset.i);
 });
@@ -518,6 +519,14 @@ function fbMark(r) {
   const m = S.fbMeta || {}, why = f.reason && m.reasons ? " — " + (m.reasons[f.reason] || f.reason) : "";
   return ` <span class="t-fb" title="твоя оцінка: ${esc(((m.verdicts || {})[f.verdict] || f.verdict) + why)}">${FB_ICON[f.verdict]}</span>`;
 }
+// на блоці — компактно: 👍 зберігає одразу; 👎 / ⊘ відкривають вибір причини на картці сигналу нижче
+function tileFbHtml(r) {
+  if (!r.fb_key) return "";
+  const f = r.feedback || {}, m = S.fbMeta || { verdicts: {} }, v = m.verdicts || {};
+  const b = (k, def) => `<button type="button" class="t-fbb${f.verdict === k ? " on" : ""}" data-fbv="${k}" data-fbi="${r.idx}" title="${esc(v[k] || def)}">${FB_ICON[k]}</button>`;
+  return `<div class="t-fbbar">${b("like", "мій сетап")}${b("dislike", "не мій")}${b("stale", "неактуально")}`
+    + (r.muted ? `<button type="button" class="linkbtn small" data-unmute="${r.idx}">повернути</button>` : "") + `</div>`;
+}
 function fbRowHtml(r) {
   if (!r.fb_key) return "";
   const f = r.feedback || {}, m = S.fbMeta || { verdicts: {}, reasons: {} };
@@ -560,6 +569,8 @@ document.addEventListener("click", async e => {
   if (vb) {
     const v = vb.dataset.fbv;
     if (v === "like") { vb.disabled = true; await fbSend(r, { verdict: "like" }); return; }
+    if (!form) return;
+    if (vb.closest(".tile")) jumpTo(i);   // з блоку — до картки сигналу, там вибір причини
     form.dataset.v = v;
     form.classList.remove("hidden");
     $("#fbm" + i).checked = v === "stale" || !!r.muted;   // «неактуально» — за замовчуванням сховати
