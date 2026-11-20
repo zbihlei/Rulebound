@@ -142,8 +142,10 @@ finally:
 # ================================================================ 3. збирач .app
 shell = shutil.which("zsh") or shutil.which("bash")
 dest = tempfile.mkdtemp(prefix="smc4_apps_")
+AP = 18765  # не робочий порт додатка: тест не має чіпати запущений на Mac Rulebound
+MKENV = dict(os.environ, SMC_APP_SHELL=shell, SMC_APP_PORT=str(AP), SMC_APP_BUNDLE_ID="local.smcapp.test")
 out = subprocess.run([sys.executable, os.path.join(APP, "make_app.py"), "--dest", dest], capture_output=True, text=True,
-                     env=dict(os.environ, SMC_APP_SHELL=shell))
+                     env=MKENV)
 bundle = os.path.join(dest, "Rulebound.app")
 exe = os.path.join(bundle, "Contents", "MacOS", "Rulebound")
 launcher = os.path.join(bundle, "Contents", "Resources", "launcher.sh")
@@ -173,25 +175,43 @@ with open(os.path.join(data4, "settings.json"), "w") as f:
     json.dump({"screener_path": "x", "results_dir": tempfile.mkdtemp()}, f)
 env = dict(os.environ, HOME=tempfile.mkdtemp(), SMC_APP_DATA=data4)
 first = subprocess.Popen([exe], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-check("програма запускає сервер на 8765", wait(lambda: up(8765), 20))
-check("відкриває окреме вікно Chrome (--app=http://127.0.0.1:8765)", wait(lambda: os.path.exists(calls) and "--app=http://127.0.0.1:8765" in open(calls).read(), 10),
+check(f"програма запускає сервер на {AP}", wait(lambda: up(AP), 20))
+check(f"відкриває окреме вікно Chrome (--app=http://127.0.0.1:{AP})", wait(lambda: os.path.exists(calls) and f"--app=http://127.0.0.1:{AP}" in open(calls).read(), 10),
       open(calls).read() if os.path.exists(calls) else "")
 time.sleep(1)
 check("програма лишається «батьком» сервера, поки він працює", first.poll() is None)
 open(calls, "w").close()
 second = subprocess.run([exe], env=env, capture_output=True, text=True, timeout=30)
-procs = subprocess.run(["pgrep", "-f", "app.py --port 8765"], capture_output=True, text=True).stdout.split()
+procs = subprocess.run(["pgrep", "-f", f"app.py --port {AP}"], capture_output=True, text=True).stdout.split()
 check("повторний запуск не стартує другий сервер, лише відкриває вікно й одразу завершується",
       second.returncode == 0 and len(procs) == 1 and "--app=" in open(calls).read(),
       [second.returncode, subprocess.run(["ps", "-eo", "pid,ppid,args"], capture_output=True, text=True).stdout[-900:]])
-post(8765, "/api/shutdown", {})
-check("«Закрити додаток»: сервер зупинився, програма теж завершилась", wait(lambda: not up(8765), 8) and wait(lambda: first.poll() is not None, 8))
+post(AP, "/api/shutdown", {})
+check("«Закрити додаток»: сервер зупинився, програма теж завершилась", wait(lambda: not up(AP), 8) and wait(lambda: first.poll() is not None, 8))
 check("у launcher.log записано «сервер закрито»", "сервер закрито" in open(os.path.join(APP, "data", "launcher.log")).read())
+# повторне натискання іконки (v2.2.2): macOS надсилає запущеній програмі «покажись» — раніше вона мовчала,
+# і macOS писала «The application "Rulebound" is not open anymore»
+if sys.platform == "darwin":
+    open(calls, "w").close()
+    subprocess.run(["/usr/bin/open", "--env", f"SMC_APP_DATA={data4}", "--env", f"HOME={env['HOME']}", bundle], check=False)
+    check("запуск через Finder/Dock: сервер піднявся", wait(lambda: up(AP), 20))
+    wait(lambda: "--app=" in open(calls).read(), 10)
+    exe_procs = lambda: subprocess.run(["pgrep", "-f", exe], capture_output=True, text=True).stdout.split()
+    first_pids = exe_procs()
+    open(calls, "w").close()
+    subprocess.run(["/usr/bin/open", bundle], check=False)
+    check("повторне натискання іконки знову відкриває вікно (без «not open anymore»)",
+          wait(lambda: "--app=" in open(calls).read(), 10), open(calls).read())
+    check("…і не запускає ні другу програму, ні другий сервер",
+          exe_procs() == first_pids and len(first_pids) == 1
+          and len(subprocess.run(["pgrep", "-f", f"app.py --port {AP}"], capture_output=True, text=True).stdout.split()) == 1)
+    post(AP, "/api/shutdown", {})
+    check("після «Закрити додаток» програма з Dock теж завершилась", wait(lambda: not up(AP), 8) and wait(lambda: not exe_procs(), 8))
 r = subprocess.run([sys.executable, os.path.join(APP, "make_app.py"), "--dest", dest, "--remove"], capture_output=True, text=True)
 check("make_app.py --remove прибирає застосунок", not os.path.exists(bundle))
 # запасний варіант без компілятора
 noc = subprocess.run([sys.executable, os.path.join(APP, "make_app.py"), "--dest", dest], capture_output=True, text=True,
-                     env=dict(os.environ, PATH="/nonexistent", SMC_APP_SHELL=shell))
+                     env=dict(MKENV, PATH="/nonexistent"))
 check("без компілятора: ярлик-скрипт і зрозуміле попередження", noc.returncode == 0 and open(exe, "rb").read(2) == b"#!"
       and "не скомпільовано" in noc.stdout, noc.stdout + noc.stderr)
 shutil.rmtree(bundle, ignore_errors=True)

@@ -20,6 +20,7 @@
 щоб писати копії журналу в iCloud Drive) тримається лише за справжньою підписаною програмою. Тому виконуваний
 файл застосунку — крихітна програма (компілюється тут же через clang з Command Line Tools і підписується
 codesign), яка запускає скрипт `Resources/launcher.sh` і лишається «батьком» сервера, поки він працює.
+На повторне натискання іконки вона знову запускає launcher.sh, і той лише відкриває вікно додатка (v2.2.2).
 Після кожної перезбірки дозвіл треба надати заново (у списку прибрати старий «Rulebound» і додати новий).
 """
 import argparse
@@ -32,8 +33,8 @@ import tempfile
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 NAME = "Rulebound"
-BUNDLE_ID = "local.smcapp.launcher"
-PORT = 8765
+BUNDLE_ID = os.environ.get("SMC_APP_BUNDLE_ID") or "local.smcapp.launcher"  # змінна — лише для тестів
+PORT = int(os.environ.get("SMC_APP_PORT") or 8765)  # змінна — лише для тестів (щоб не чіпати робочий додаток)
 
 LAUNCHER = r'''#!/bin/zsh
 # Rulebound: запуск без Терміналу. Згенеровано make_app.py — не редагуй руками, перезбери: python3 make_app.py
@@ -88,7 +89,7 @@ fi
 '''
 
 
-STUB_C = r'''/* Rulebound: виконуваний файл застосунку. Запускає Resources/launcher.sh і чекає на нього,
+STUB_C = r'''/* Rulebound: запасна обгортка (якщо Cocoa не скомпілювалась). Запускає Resources/launcher.sh і чекає на нього,
    щоб дозволи macOS, надані «Rulebound», діяли й для сервера додатка. Згенеровано make_app.py. */
 #include <limits.h>
 #include <libgen.h>
@@ -116,19 +117,120 @@ int main(int argc, char *argv[]) {
 '''
 
 
+STUB_M = r'''/* Rulebound: виконуваний файл застосунку (Cocoa). Запускає Resources/launcher.sh і лишається «батьком»
+   сервера, щоб дозволи macOS, надані «Rulebound», діяли й для нього. На повторне натискання іконки (macOS надсилає
+   вже запущеній програмі сигнал «покажись») знову запускає launcher.sh — той лише відкриває вікно додатка.
+   Без цього macOS показувала «The application "Rulebound" is not open anymore». Згенеровано make_app.py. */
+#import <Cocoa/Cocoa.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <limits.h>
+#include <spawn.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#ifndef SHELL_PATH
+#define SHELL_PATH "/bin/zsh"
+#endif
+#ifndef APP_PORT
+#define APP_PORT 8765
+#endif
+extern char **environ;
+static char gScript[PATH_MAX + 64];
+static NSDate *gStarted;
+
+static pid_t run_launcher(void) {
+    pid_t pid;
+    char *args[] = {SHELL_PATH, gScript, NULL};
+    return posix_spawn(&pid, SHELL_PATH, NULL, NULL, args, environ) == 0 ? pid : -1;
+}
+
+/* Чекає на launcher.sh у фоні; для першого запуску — завершує програму разом із ним. */
+static void watch(pid_t pid, BOOL quit) {
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+        int st = 0;
+        while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+        if (quit) dispatch_async(dispatch_get_main_queue(), ^{ exit(WIFEXITED(st) ? WEXITSTATUS(st) : 1); });
+    });
+}
+
+static BOOL server_up(void) {
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) return NO;
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(APP_PORT);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    BOOL ok = connect(s, (struct sockaddr *)&a, sizeof a) == 0;
+    close(s);
+    return ok;
+}
+
+@interface RBDelegate : NSObject <NSApplicationDelegate>
+@end
+@implementation RBDelegate
+- (void)applicationDidFinishLaunching:(NSNotification *)note {
+    gStarted = [[NSDate date] retain];
+    pid_t pid = run_launcher();
+    if (pid < 0) exit(1);
+    watch(pid, YES);
+}
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible {
+    /* Перші 20 с сервер ще може підніматися — перший запуск сам відкриє вікно, другий сервер не потрібен. */
+    if (server_up() || [[NSDate date] timeIntervalSinceDate:gStarted] > 20) {
+        pid_t pid = run_launcher();
+        if (pid > 0) watch(pid, NO);
+    }
+    return NO;
+}
+@end
+
+int main(int argc, char *argv[]) {
+    char exe[PATH_MAX], dir[PATH_MAX];
+    (void)argc;
+    if (!realpath(argv[0], exe)) return 1;
+    strlcpy(dir, exe, sizeof dir);
+    char *slash = strrchr(dir, '/');
+    if (slash) *slash = 0;
+    snprintf(gScript, sizeof gScript, "%s/../Resources/launcher.sh", dir);
+    @autoreleasepool {
+        NSApplication *app = [NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        [app setDelegate:[[RBDelegate alloc] init]];
+        [app run];
+    }
+    return 0;
+}
+'''
+
+
+def _cc(cc, args):
+    r = subprocess.run([cc] + args, capture_output=True, text=True)
+    return None if r.returncode == 0 else (r.stderr or r.stdout or "помилка компіляції").strip()[-300:]
+
+
 def compile_stub(exe, shell="/bin/zsh"):
-    """Компілює C-обгортку. Повертає None, якщо вдалося, або текст помилки."""
+    """Компілює програму-обгортку: спершу Cocoa (вміє відповідати на повторне натискання іконки),
+    без Cocoa — проста програма на C. Повертає None, якщо вдалося, або текст помилки."""
     cc = shutil.which("clang") or shutil.which("cc")
     if not cc:
         return "немає компілятора (clang / cc)"
     tmp = tempfile.mkdtemp()
-    src = os.path.join(tmp, "smc_app_stub.c")
-    with open(src, "w", encoding="utf-8") as f:
-        f.write(STUB_C)
+    defs = [f'-DSHELL_PATH="{shell}"', f"-DAPP_PORT={PORT}"]
     try:
-        r = subprocess.run([cc, "-O2", f'-DSHELL_PATH="{shell}"', "-o", exe, src], capture_output=True, text=True)
-        if r.returncode != 0:
-            return (r.stderr or r.stdout or "помилка компіляції").strip()[-300:]
+        src_m = os.path.join(tmp, "rulebound_stub.m")
+        src_c = os.path.join(tmp, "smc_app_stub.c")
+        with open(src_m, "w", encoding="utf-8") as f:
+            f.write(STUB_M)
+        with open(src_c, "w", encoding="utf-8") as f:
+            f.write(STUB_C)
+        err = None
+        if sys.platform == "darwin":
+            err = _cc(cc, ["-O2", "-fno-objc-arc", "-framework", "Cocoa"] + defs + ["-o", exe, src_m])
+        if sys.platform != "darwin" or err:
+            err = _cc(cc, ["-O2"] + defs + ["-o", exe, src_c])
+        if err:
+            return err
         os.chmod(exe, 0o755)
         return None
     finally:
@@ -239,7 +341,10 @@ def main():
     print(f"Python: {sys.executable}")
     print("Відкрити: Launchpad / Spotlight → «Rulebound». Щоб був у Dock — перетягни його з Finder у Dock.")
     if sys.platform == "darwin":
-        subprocess.run(["open", "-R", app], check=False)  # показати у Finder
+        try:
+            subprocess.run(["open", "-R", app], check=False)  # показати у Finder
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
