@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Rulebound — локальний додаток для скринера й журналу (етап 1: каркас + вкладка «Скринер»).
+SMC Workstation — локальний додаток для скринера й журналу (етап 1: каркас + вкладка «Скринер»).
 
 Запуск:  python3 app.py            (відкриє http://127.0.0.1:8765 у браузері)
          python3 app.py --port 8800 --no-browser
@@ -40,7 +40,7 @@ import feedback
 import tg
 import stats
 
-APP_VERSION = "2.2.2"
+APP_VERSION = "2.3.0"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(APP_DIR, "static")
 DATA_DIR = os.environ.get("SMC_APP_DATA", os.path.join(APP_DIR, "data"))
@@ -110,7 +110,7 @@ def load_settings():
 
 
 def fix_moved_paths(s):
-    """Папку додатка перейменували чи перенесли (напр. ~/smc_app → ~/Rulebound): шляхи в settings.json ведуть
+    """Папку додатка перейменували чи перенесли (напр. ~/smc_app → ~/smc_workstation): шляхи в settings.json ведуть
     у папку, якої вже немає. Тоді беремо файл/папку з тим самим ім'ям у поточній папці додатка.
     Якщо стара папка існує — шлях не чіпаємо (це свідомий вибір користувача)."""
     for k in ("screener_path", "results_dir"):
@@ -562,7 +562,7 @@ def watchdog(interval=60, wake_gap=90, grace=240):
                 ex = st.get("last_exit")
                 if ex and ex != t["exit"]:
                     t["exit"] = ex
-                    notify_mac(f"Rulebound: {label} зупинився", f"{label.capitalize()} завершився сам о {ex['at']}. Відкрий Rulebound і натисни «Старт».")
+                    notify_mac(f"SMC Workstation: {label} зупинився", f"{label.capitalize()} завершився сам о {ex['at']}. Відкрий SMC Workstation і натисни «Старт».")
                 if not st.get("running"):
                     t["stale"] = False
                     continue
@@ -570,7 +570,7 @@ def watchdog(interval=60, wake_gap=90, grace=240):
                 if stale and not t["stale"] and now >= quiet_until:
                     t["stale"] = True
                     mins = int((age or 0) // 60)
-                    notify_mac(f"Rulebound: немає сканів ({label})", (f"Останній скан {mins} хв тому. " if age else "")
+                    notify_mac(f"SMC Workstation: немає сканів ({label})", (f"Останній скан {mins} хв тому. " if age else "")
                                + ("Перевір, чи відкритий MT5 з роботом SMC_Bridge" if fx else "Перевір мережу")
                                + "; подробиці — у лозі скринера в додатку.")
                 elif not stale:
@@ -1867,7 +1867,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not chat:
                     return self._send(400, {"ok": False, "error": "бот ще не бачив твого повідомлення: відкрий бота в Telegram, натисни Start (або напиши йому будь-що) і спробуй ще раз"})
                 bot = tg.bot_name()
-                tg.send(chat, f"✅ <b>Rulebound підключено</b>\nСюди приходитимуть алерти скринера (НОВА ПАРА, ЦІНА В ЗОНІ) і службові сповіщення.")
+                tg.send(chat, f"✅ <b>SMC Workstation підключено</b>\nСюди приходитимуть алерти скринера (НОВА ПАРА, ЦІНА В ЗОНІ) і службові сповіщення.")
             except tg.TgError as e:
                 return self._send(400, {"ok": False, "error": str(e)})
             new = dict(s, tg_chat=str(chat), tg_name=name or "", tg_enabled=True)
@@ -1893,7 +1893,7 @@ class Handler(BaseHTTPRequestHandler):
             if not chat:
                 return self._send(400, {"ok": False, "error": "Telegram не підключено або вимкнено"})
             try:
-                tg.send(chat, tg.format_alert("Rulebound", "НОВА ПАРА: TESTUSDT Short | бали 2 | підхід до зони | вхід 1.000 стоп 1.020 ціль 0.930 R:R 3.5 | УВАГА: це тестове повідомлення", "new", "BINANCE:BTCUSDT.P"))
+                tg.send(chat, tg.format_alert("SMC Workstation", "НОВА ПАРА: TESTUSDT Short | бали 2 | підхід до зони | вхід 1.000 стоп 1.020 ціль 0.930 R:R 3.5 | УВАГА: це тестове повідомлення", "new", "BINANCE:BTCUSDT.P"))
             except tg.TgError as e:
                 return self._send(400, {"ok": False, "error": str(e)})
             return self._send(200, {"ok": True})
@@ -2016,7 +2016,7 @@ RESTART = {"on": False}
 
 def main():
     global SCREENER, FX, JOURNAL, SERVER
-    p = argparse.ArgumentParser(description="Rulebound: скринер + журнал на localhost")
+    p = argparse.ArgumentParser(description="SMC Workstation: скринер + журнал на localhost")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-browser", action="store_true", help="не відкривати браузер автоматично")
     a = p.parse_args()
@@ -2039,7 +2039,7 @@ def main():
     srv.daemon_threads = True
     SERVER = srv
     url = f"http://127.0.0.1:{a.port}"
-    print(f"Rulebound {APP_VERSION}: {url}  (зупинити додаток: Ctrl+C)")
+    print(f"SMC Workstation {APP_VERSION}: {url}  (зупинити додаток: Ctrl+C)")
     if SCREENER.status()["running"]:
         print(f"Скринер уже працює з попереднього запуску (pid {SCREENER.state.get('pid')}), підхоплюю його.")
     threading.Thread(target=watchdog, daemon=True).start()

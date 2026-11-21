@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- SMC Workstation, круглий варіант для аватарки (Telegram обрізає по колу): усе всередині вписаного кола -->
+  <rect width="1024" height="1024" fill="#0f172a"/>
+  <g transform="translate(512 512) scale(1.1) translate(-512 -480)">
+    <rect x="200" y="640" width="624" height="110" rx="22" fill="#22c55e" fill-opacity=".22"/>
+    <rect x="200" y="640" width="624" height="8" rx="4" fill="#22c55e"/>
+    <g stroke-linecap="round" stroke-width="22">
+      <line x1="330" y1="300" x2="330" y2="720" stroke="#94a3b8"/>
+      <rect x="285" y="380" width="90" height="250" rx="14" fill="#94a3b8" stroke="none"/>
+      <line x1="512" y1="390" x2="512" y2="700" stroke="#f8fafc"/>
+      <rect x="467" y="450" width="90" height="190" rx="14" fill="#f8fafc" stroke="none"/>
+      <line x1="694" y1="210" x2="694" y2="560" stroke="#22c55e"/>
+      <rect x="649" y="270" width="90" height="230" rx="14" fill="#22c55e" stroke="none"/>
+    </g>
+  </g>
+</svg>

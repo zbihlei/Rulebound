@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Створює на Mac застосунок «Rulebound.app» — запуск додатка без Терміналу (етап 4).
+Створює на Mac застосунок «SMC Workstation.app» — запуск додатка без Терміналу (етап 4).
 
-    cd ~/Rulebound && python3 make_app.py            # у ~/Applications (видно в Launchpad і Spotlight)
+    cd ~/smc_workstation && python3 make_app.py            # у ~/Applications (видно в Launchpad і Spotlight)
     python3 make_app.py --dest ~/Desktop                   # або в іншу папку
     python3 make_app.py --remove                           # прибрати
 
-Що робить «Rulebound» при запуску:
+Що робить «SMC Workstation» при запуску:
   1) підвантажує ~/.zshrc (там SMC_SHEET_URL / SMC_SHEET_TOKEN для аркуша «Скринер»);
   2) якщо сервер додатка ще не працює — запускає його у фоні (`python3 app.py --no-browser`, лог у data/app.log);
   3) відкриває додаток окремим вікном Chrome без вкладок і адресного рядка (`--app`), а без Chrome — у браузері.
 Закрити сам додаток: «Налаштування → Закрити додаток» (скринер, якщо працює, не зупиняється).
 
 Застосунок створюється тут, на твоєму Mac, тому macOS не блокує його як «завантажений з інтернету».
-Якщо перенесеш чи перейменуєш папку додатка (~/Rulebound) — просто запусти make_app.py ще раз.
+Якщо перенесеш чи перейменуєш папку додатка (~/smc_workstation) — просто запусти make_app.py ще раз.
 
 Чому всередині маленька програма на C, а не просто скрипт: дозвіл macOS «Повний доступ до диска» (потрібен,
 щоб писати копії журналу в iCloud Drive) тримається лише за справжньою підписаною програмою. Тому виконуваний
 файл застосунку — крихітна програма (компілюється тут же через clang з Command Line Tools і підписується
 codesign), яка запускає скрипт `Resources/launcher.sh` і лишається «батьком» сервера, поки він працює.
 На повторне натискання іконки вона знову запускає launcher.sh, і той лише відкриває вікно додатка (v2.2.2).
-Після кожної перезбірки дозвіл треба надати заново (у списку прибрати старий «Rulebound» і додати новий).
+Після кожної перезбірки дозвіл треба надати заново (у списку прибрати старий «SMC Workstation» і додати новий).
 """
 import argparse
 import os
@@ -32,12 +32,12 @@ import sys
 import tempfile
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-NAME = "Rulebound"
+NAME = "SMC Workstation"
 BUNDLE_ID = os.environ.get("SMC_APP_BUNDLE_ID") or "local.smcapp.launcher"  # змінна — лише для тестів
 PORT = int(os.environ.get("SMC_APP_PORT") or 8765)  # змінна — лише для тестів (щоб не чіпати робочий додаток)
 
 LAUNCHER = r'''#!/bin/zsh
-# Rulebound: запуск без Терміналу. Згенеровано make_app.py — не редагуй руками, перезбери: python3 make_app.py
+# SMC Workstation: запуск без Терміналу. Згенеровано make_app.py — не редагуй руками, перезбери: python3 make_app.py
 APP_DIR=__APP_DIR__
 PY=__PYTHON__
 PORT=__PORT__
@@ -50,7 +50,7 @@ LOG="$APP_DIR/data/launcher.log"
 export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 alert() {
-  /usr/bin/osascript -e "display alert \"Rulebound\" message \"$1\" as critical" >/dev/null 2>&1
+  /usr/bin/osascript -e "display alert \"SMC Workstation\" message \"$1\" as critical" >/dev/null 2>&1
 }
 up() { /usr/bin/curl -s -o /dev/null --max-time 1 "$URL/api/status"; }
 
@@ -81,7 +81,7 @@ else
 fi
 
 # Якщо сервер запустили ми — чекаємо, поки його закриють («Налаштування → Закрити додаток»).
-# Так програма Rulebound лишається «батьком» сервера, і дозволи macOS (iCloud Drive) діють і для нього.
+# Так програма SMC Workstation лишається «батьком» сервера, і дозволи macOS (iCloud Drive) діють і для нього.
 if [ -n "$SERVER_PID" ]; then
   wait "$SERVER_PID"
   echo "$(date '+%F %T') сервер закрито" >> "$LOG"
@@ -89,8 +89,8 @@ fi
 '''
 
 
-STUB_C = r'''/* Rulebound: запасна обгортка (якщо Cocoa не скомпілювалась). Запускає Resources/launcher.sh і чекає на нього,
-   щоб дозволи macOS, надані «Rulebound», діяли й для сервера додатка. Згенеровано make_app.py. */
+STUB_C = r'''/* SMC Workstation: запасна обгортка (якщо Cocoa не скомпілювалась). Запускає Resources/launcher.sh і чекає на нього,
+   щоб дозволи macOS, надані «SMC Workstation», діяли й для сервера додатка. Згенеровано make_app.py. */
 #include <limits.h>
 #include <libgen.h>
 #include <spawn.h>
@@ -117,10 +117,10 @@ int main(int argc, char *argv[]) {
 '''
 
 
-STUB_M = r'''/* Rulebound: виконуваний файл застосунку (Cocoa). Запускає Resources/launcher.sh і лишається «батьком»
-   сервера, щоб дозволи macOS, надані «Rulebound», діяли й для нього. На повторне натискання іконки (macOS надсилає
+STUB_M = r'''/* SMC Workstation: виконуваний файл застосунку (Cocoa). Запускає Resources/launcher.sh і лишається «батьком»
+   сервера, щоб дозволи macOS, надані «SMC Workstation», діяли й для нього. На повторне натискання іконки (macOS надсилає
    вже запущеній програмі сигнал «покажись») знову запускає launcher.sh — той лише відкриває вікно додатка.
-   Без цього macOS показувала «The application "Rulebound" is not open anymore». Згенеровано make_app.py. */
+   Без цього macOS показувала «The application "SMC Workstation" is not open anymore». Згенеровано make_app.py. */
 #import <Cocoa/Cocoa.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -218,7 +218,7 @@ def compile_stub(exe, shell="/bin/zsh"):
     tmp = tempfile.mkdtemp()
     defs = [f'-DSHELL_PATH="{shell}"', f"-DAPP_PORT={PORT}"]
     try:
-        src_m = os.path.join(tmp, "rulebound_stub.m")
+        src_m = os.path.join(tmp, "wrapper_stub.m")
         src_c = os.path.join(tmp, "smc_app_stub.c")
         with open(src_m, "w", encoding="utf-8") as f:
             f.write(STUB_M)
@@ -303,7 +303,7 @@ def build(dest, python):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Створити «Rulebound.app» для запуску без Терміналу")
+    p = argparse.ArgumentParser(description="Створити «SMC Workstation.app» для запуску без Терміналу")
     p.add_argument("--dest", default="~/Applications", help="куди покласти застосунок (~/Applications)")
     p.add_argument("--remove", action="store_true", help="видалити створений застосунок")
     a = p.parse_args()
@@ -335,11 +335,11 @@ def main():
               "можуть не писатись. Встанови Command Line Tools: xcode-select --install, і запусти make_app.py ще раз.")
     else:
         print("Програма-обгортка: скомпільовано" + (", підписано (codesign)" if signed else "") + ".")
-        print("Якщо «Rulebound» уже є в «Повному доступі до диска» — прибери його там (−) і додай знову (+): "
+        print("Якщо «SMC Workstation» уже є в «Повному доступі до диска» — прибери його там (−) і додай знову (+): "
               "після перезбірки старий дозвіл не діє.")
     print(f"Папка додатка: {APP_DIR}")
     print(f"Python: {sys.executable}")
-    print("Відкрити: Launchpad / Spotlight → «Rulebound». Щоб був у Dock — перетягни його з Finder у Dock.")
+    print("Відкрити: Launchpad / Spotlight → «SMC Workstation». Щоб був у Dock — перетягни його з Finder у Dock.")
     if sys.platform == "darwin":
         try:
             subprocess.run(["open", "-R", app], check=False)  # показати у Finder

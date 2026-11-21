@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""v2.0 Rulebound: профіль бота (назва, описи, фото) — кожен крок окремо; лого в шапці. Запуск: python3 tests/test_brand.py"""
+"""v2.0 SMC Workstation: профіль бота (назва, описи, фото) — кожен крок окремо; лого в шапці. Запуск: python3 tests/test_brand.py"""
 import os
 import sys
 
@@ -23,8 +23,8 @@ tg._call = lambda m, p, timeout=12: calls.append((m, p)) or True
 tg._upload = lambda m, p, files, timeout=30: ups.append((m, p, list(files))) or True
 jpg = os.path.join(APP, "static", "brand", "bot.jpg")
 r = tg.set_brand(jpg)
-check("назва «Rulebound», короткий і повний опис, фото — усі 4 кроки", r == {"done": ["назва", "короткий опис", "опис", "фото"], "errors": {}}, r)
-check("setMyName з назвою Rulebound", ("setMyName", {"name": "Rulebound"}) in calls)
+check("назва «SMC Workstation», короткий і повний опис, фото — усі 4 кроки", r == {"done": ["назва", "короткий опис", "опис", "фото"], "errors": {}}, r)
+check("setMyName з назвою SMC Workstation", ("setMyName", {"name": "SMC Workstation"}) in calls)
 check("фото: setMyProfilePhoto, static, attach://pic", ups and ups[0][0] == "setMyProfilePhoto" and '"attach://pic"' in ups[0][1]["photo"] and ups[0][2] == ["pic"], ups)
 check("файл лого для бота є (JPEG 640×640)", os.path.getsize(jpg) > 5000 and open(jpg, "rb").read(2) == b"\xff\xd8")
 

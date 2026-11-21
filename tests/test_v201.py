@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""v2.0.1: папку додатка перейменували (~/smc_app → ~/Rulebound) — шляхи з settings.json підхоплюються з нової папки.
+"""v2.0.1: папку додатка перейменували (~/smc_app → ~/smc_workstation) — шляхи з settings.json підхоплюються з нової папки.
 Запуск: python3 tests/test_v201.py"""
 import json
 import os

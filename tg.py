@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Telegram-алерти для Rulebound: бот лише НАДСИЛАЄ повідомлення тобі (без команд).
+Telegram-алерти для SMC Workstation: бот лише НАДСИЛАЄ повідомлення тобі (без команд).
 
 Токен бота — у змінній середовища SMC_TG_TOKEN (рядок у ~/.zshrc), не в коді й не в налаштуваннях.
 Номер чату (chat id) не секретний: додаток знаходить його сам («Налаштування → Telegram → Підключити»)
@@ -105,9 +105,9 @@ def find_chat():
     return None, None
 
 
-BRAND_NAME = "Rulebound"
-BRAND_SHORT = "Алерти Rulebound: ситуації за твоїми правилами. Не фінансова порада."
-BRAND_DESC = ("Rulebound — робоче місце трейдера, який торгує за записаними правилами. "
+BRAND_NAME = "SMC Workstation"
+BRAND_SHORT = "Алерти SMC Workstation: ситуації за твоїми правилами. Не фінансова порада."
+BRAND_DESC = ("SMC Workstation — робоче місце трейдера, який торгує за записаними правилами. "
               "Бот лише надсилає алерти з твого додатка: нова ситуація, ціна в зоні, уточнення входу. "
               "Рішення завжди за тобою; це не фінансова порада.")
 
@@ -139,7 +139,7 @@ def set_brand(photo_path=None):
         def photo():
             with open(photo_path, "rb") as f:
                 return _upload("setMyProfilePhoto", {"photo": json.dumps({"type": "static", "photo": "attach://pic"})},
-                               {"pic": ("rulebound.jpg", f, "image/jpeg")})
+                               {"pic": ("bot.jpg", f, "image/jpeg")})
         steps.append(("фото", photo))
     for label, fn in steps:
         try:

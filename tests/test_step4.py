@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Етап 4: вкладка «Стратегія», збирач Rulebound.app, лаунчер (зі стабами open/osascript) і «Закрити додаток».
+"""Етап 4: вкладка «Стратегія», збирач SMC Workstation.app, лаунчер (зі стабами open/osascript) і «Закрити додаток».
 Запуск: python3 tests/test_step4.py [папка_скріншотів]   (macOS не потрібен)"""
 import json
 import os
@@ -132,7 +132,7 @@ try:
         # ---------- «Закрити додаток»
         pg.click(".tab[data-tab=settings]")
         pg.click("#btnShutdown")
-        expect(pg.locator(".closed")).to_contain_text("Rulebound закрито")
+        expect(pg.locator(".closed")).to_contain_text("SMC Workstation закрито")
         check("«Закрити додаток» зупиняє сервер", wait(lambda: not up(PORT), 8))
         check("помилок у консолі браузера немає", not [e for e in errors if "Failed to fetch" not in e], errors[:3])
         b.close()
@@ -142,19 +142,19 @@ finally:
 # ================================================================ 3. збирач .app
 shell = shutil.which("zsh") or shutil.which("bash")
 dest = tempfile.mkdtemp(prefix="smc4_apps_")
-AP = 18765  # не робочий порт додатка: тест не має чіпати запущений на Mac Rulebound
+AP = 18765  # не робочий порт додатка: тест не має чіпати запущений на Mac SMC Workstation
 MKENV = dict(os.environ, SMC_APP_SHELL=shell, SMC_APP_PORT=str(AP), SMC_APP_BUNDLE_ID="local.smcapp.test")
 out = subprocess.run([sys.executable, os.path.join(APP, "make_app.py"), "--dest", dest], capture_output=True, text=True,
                      env=MKENV)
-bundle = os.path.join(dest, "Rulebound.app")
-exe = os.path.join(bundle, "Contents", "MacOS", "Rulebound")
+bundle = os.path.join(dest, "SMC Workstation.app")
+exe = os.path.join(bundle, "Contents", "MacOS", "SMC Workstation")
 launcher = os.path.join(bundle, "Contents", "Resources", "launcher.sh")
-check("make_app.py створює Rulebound.app", out.returncode == 0 and os.path.isdir(bundle), out.stdout + out.stderr)
+check("make_app.py створює SMC Workstation.app", out.returncode == 0 and os.path.isdir(bundle), out.stdout + out.stderr)
 check("виконуваний файл — скомпільована програма (не скрипт)", open(exe, "rb").read(4) in (b"\x7fELF", b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe")
       and "скомпільовано" in out.stdout, out.stdout)
 with open(os.path.join(bundle, "Contents", "Info.plist"), "rb") as f:
     info = plistlib.load(f)
-check("Info.plist коректний (виконуваний файл, id, без іконки в Dock)", info["CFBundleExecutable"] == "Rulebound"
+check("Info.plist коректний (виконуваний файл, id, без іконки в Dock)", info["CFBundleExecutable"] == "SMC Workstation"
       and info["CFBundlePackageType"] == "APPL" and info["LSUIElement"] is True)
 check("launcher.sh у Resources знає папку додатка й Python", os.access(launcher, os.X_OK)
       and f'APP_DIR="{APP}"' in open(launcher).read() and sys.executable in open(launcher).read())
@@ -190,7 +190,7 @@ post(AP, "/api/shutdown", {})
 check("«Закрити додаток»: сервер зупинився, програма теж завершилась", wait(lambda: not up(AP), 8) and wait(lambda: first.poll() is not None, 8))
 check("у launcher.log записано «сервер закрито»", "сервер закрито" in open(os.path.join(APP, "data", "launcher.log")).read())
 # повторне натискання іконки (v2.2.2): macOS надсилає запущеній програмі «покажись» — раніше вона мовчала,
-# і macOS писала «The application "Rulebound" is not open anymore»
+# і macOS писала «The application "SMC Workstation" is not open anymore»
 if sys.platform == "darwin":
     open(calls, "w").close()
     subprocess.run(["/usr/bin/open", "--env", f"SMC_APP_DATA={data4}", "--env", f"HOME={env['HOME']}", bundle], check=False)
